@@ -138,19 +138,18 @@ class EventStreamer(object):
             self.reset_queue()
 
     def process_queued_events(self) -> None:
-        while not self._event_queue.empty():
-            self.processing_lock.acquire()
-            try:
+        self.processing_lock.acquire()
+        try:
+            while not self._event_queue.empty():
                 event = self._event_queue.peek(block=False)
-                if not _upload_event(event):
-                    return
-                # remove the event from the queue
-                self._event_queue.get(block=False)
-                self._event_queue.task_done()
-            except Empty:
-                logging.error("threading error detected")
-            finally:
-                self.processing_lock.release()
+                if _upload_event(event):
+                    # remove the event from the queue
+                    self._event_queue.get(block=False)
+                    self._event_queue.task_done()
+        except Empty:
+            logging.error("threading error detected")
+        finally:
+            self.processing_lock.release()
 
 
 event_streamer = EventStreamer()
