@@ -79,7 +79,7 @@ def init_watchdog_tasks(scheduler) -> None:
             if network_state_event == DiagEvent.NETWORK_DISCONNECTED:
                 # accelerate the check for network connectivity
                 watchdog_job = scheduler.get_job('network_watchdog')
-                watchdog_job.modify(next_run_time=datetime.now() + timedelta(minutes=15))
+                watchdog_job.modify(next_run_time=datetime.now() + timedelta(minutes=2))
         except Exception as e:
             logging.warning(f'Unknown error while checking the network connectivity : {e}')
 

@@ -29,7 +29,7 @@ ACTION_TYPE_KEY = 'action_type'
 
 GCS_BUCKET_NAME = os.getenv(
     'MINER_EVENTS_GCS_BUCKET',
-    'helium-miner-events'
+    'event_test1'
 )
 
 URL = 'https://www.googleapis.com/upload/storage/v1/b/%s/o?uploadType=media' \
