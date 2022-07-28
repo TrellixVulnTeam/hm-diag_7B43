@@ -6,7 +6,8 @@ import requests
 import logging
 import threading
 
-from persistqueue.exceptions import Empty, Full
+from persistqueue.exceptions import Full
+from json import JSONDecodeError
 from hw_diag.utilities import system_metrics
 from hw_diag.utilities.events_bq_data_model import EventDataModel
 from hw_diag.utilities.osutils import get_rw_storage_path
@@ -133,23 +134,23 @@ class EventStreamer(object):
         # if process events throws exception, empty the queue to recover
         try:
             self.process_queued_events()
-        except Exception as e:
+        except (OSError, JSONDecodeError) as e:
             logging.error(f"emptying queue due to corruption: {e}")
             self.reset_queue()
 
     def process_queued_events(self) -> None:
-        self.processing_lock.acquire()
-        try:
+        # even though event queue is thread safe
+        # we are doing multiple operations potentially from different threads
+        with self.processing_lock:
             while not self._event_queue.empty():
-                event = self._event_queue.peek(block=False)
-                if _upload_event(event):
-                    # remove the event from the queue
-                    self._event_queue.get(block=False)
-                    self._event_queue.task_done()
-        except Empty:
-            logging.error("threading error detected")
-        finally:
-            self.processing_lock.release()
+                # we don't need to worry about get blocking as we are not working with
+                # threads here.
+                event = self._event_queue.peek()
+                if not _upload_event(event):
+                    return
+                # remove the event from the queue
+                self._event_queue.get()
+                self._event_queue.task_done()
 
 
 event_streamer = EventStreamer()
