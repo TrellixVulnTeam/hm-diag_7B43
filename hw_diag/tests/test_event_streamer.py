@@ -44,8 +44,8 @@ class TestEventStreamer(unittest.TestCase):
         # make sure next two calls to upload will fail and queue builds up
         add_upload_failure_response()
         add_upload_failure_response()
-        event_streamer.enqueue_event(valid_test_event())
-        event_streamer.enqueue_event(valid_test_event())
+        event_streamer.enqueue_persistent_event(valid_test_event())
+        event_streamer.enqueue_persistent_event(valid_test_event())
         self.assertEqual(event_streamer._event_queue.qsize(), 2)
 
     @responses.activate
@@ -54,19 +54,19 @@ class TestEventStreamer(unittest.TestCase):
         # make sure next three calls to upload will fail
         # that means our queue should build up
         add_upload_failure_response()
-        event_streamer.enqueue_event(valid_test_event())
+        event_streamer.enqueue_persistent_event(valid_test_event())
         self.assertEqual(event_streamer._event_queue.qsize(), 1)
         # allow calls to response succeed
         add_upload_success_response()
         add_upload_success_response()
-        event_streamer.enqueue_event(valid_test_event())
+        event_streamer.enqueue_persistent_event(valid_test_event())
         self.assertEqual(event_streamer._event_queue.qsize(), 0)
 
     def test_enqueue_invalid_event(self):
         event_streamer.clear_queued_events()
         # make sure next two calls to upload will fail and queue builds up
-        event_streamer.enqueue_event({})
-        event_streamer.enqueue_event({})
+        event_streamer.enqueue_persistent_event({})
+        event_streamer.enqueue_persistent_event({})
         self.assertEqual(event_streamer._event_queue.qsize(), 0)
 
     @patch('hw_diag.utilities.event_streamer.EventStreamer.process_queued_events',
@@ -74,5 +74,5 @@ class TestEventStreamer(unittest.TestCase):
     @patch('hw_diag.utilities.event_streamer.EventStreamer.reset_queue')
     def test_process_event_failure(self, mock_reset_queue, mock_process_queued_events):
         event_streamer.clear_queued_events()
-        event_streamer.enqueue_event(valid_test_event())
+        event_streamer.enqueue_persistent_event(valid_test_event())
         self.assertEqual(mock_reset_queue.call_count, 1)

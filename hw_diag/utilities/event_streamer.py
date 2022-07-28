@@ -4,6 +4,7 @@ import json
 import shutil
 import requests
 import logging
+import threading
 
 from persistqueue.exceptions import Empty, Full
 from hw_diag.utilities import system_metrics
@@ -87,6 +88,7 @@ def event_fingerprint(event_type, action_type=DiagAction.ACTION_NONE, msg="") ->
 
 class EventStreamer(object):
     def __init__(self, max_size=1000) -> None:
+        self.processing_lock = threading.Lock()
         self._max_size = max_size
         self._storage_path = get_rw_storage_path(VOLUME_PATH, EVENTS_FOLDER)
         self._event_queue = FifoDiskQueue(self._storage_path, maxsize=self._max_size)
@@ -101,12 +103,17 @@ class EventStreamer(object):
             self._event_queue.get()
             self._event_queue.task_done()
 
-    def _enqueue_event_after_validation(self, event: dict) -> None:
+    def is_event_valid(self, event: dict) -> bool:
         try:
             EventDataModel(**event)
         except Exception as e:
             logging.error(
                 f"failed to enforce bigquery datamodel, modify schema or event to fix: {e}")
+            return False
+        return True
+
+    def _enqueue_event_after_validation(self, event: dict) -> None:
+        if not self.is_event_valid(event):
             return
 
         try:
@@ -117,6 +124,11 @@ class EventStreamer(object):
             logging.error(f"failed to enqueue event: {e}")
 
     def enqueue_event(self, event) -> None:
+        if not self.is_event_valid(event):
+            return
+        _upload_event(event)
+
+    def enqueue_persistent_event(self, event) -> None:
         self._enqueue_event_after_validation(event)
         # if process events throws exception, empty the queue to recover
         try:
@@ -127,15 +139,18 @@ class EventStreamer(object):
 
     def process_queued_events(self) -> None:
         while not self._event_queue.empty():
+            self.processing_lock.acquire()
             try:
                 event = self._event_queue.peek(block=False)
-            except Empty:  # some other thread might have processed the event
-                continue
-            if not _upload_event(event):
-                return
-            # remove the event from the queue
-            self._event_queue.get()
-            self._event_queue.task_done()
+                if not _upload_event(event):
+                    return
+                # remove the event from the queue
+                self._event_queue.get(block=False)
+                self._event_queue.task_done()
+            except Empty:
+                logging.error("threading error detected")
+            finally:
+                self.processing_lock.release()
 
 
 event_streamer = EventStreamer()
