@@ -5,7 +5,7 @@ import shutil
 import requests
 import logging
 
-from persistqueue import Full
+from persistqueue.exceptions import Empty, Full
 from hw_diag.utilities import system_metrics
 from hw_diag.utilities.events_bq_data_model import EventDataModel
 from hw_diag.utilities.osutils import get_rw_storage_path
@@ -19,6 +19,7 @@ EVENTS_FOLDER = 'events'
 
 NETWORK_EVENT_BASE = 0
 CONTAINER_EVENT_BASE = 1000
+MISC_EVENT_BASE = 2000
 
 NETWORK_ACTION_BASE = 10000
 CONTAINER_ACTION_BASE = 11000
@@ -39,6 +40,7 @@ class DiagEvent(Enum):
     NETWORK_DISCONNECTED = NETWORK_ACTION_BASE  # completely disconnected.
     NETWORK_LOCAL_CONNECTED = auto()  # connected to local gateway
     NETWORK_INTERNET_CONNECTED = auto()  # connected to internet
+    HEARTBEAT = MISC_EVENT_BASE
 
 
 class DiagAction(Enum):
@@ -125,9 +127,10 @@ class EventStreamer(object):
 
     def process_queued_events(self) -> None:
         while not self._event_queue.empty():
-            # we don't need to worry about get blocking as we are not working with
-            # threads here.
-            event = self._event_queue.peek()
+            try:
+                event = self._event_queue.peek(block=False)
+            except Empty:  # some other thread might have processed the event
+                continue
             if not _upload_event(event):
                 return
             # remove the event from the queue

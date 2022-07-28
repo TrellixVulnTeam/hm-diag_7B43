@@ -53,22 +53,6 @@ def init_scheduled_tasks(app) -> None:
     def run_ship_diagnostics_task():
         perform_hw_diagnostics(ship=True)
 
-    watchdog = NetworkWatchdog()
-
-    def modify_network_watchdog_next_run(minutes=60):
-        watchdog_job = scheduler.get_job('network_watchdog')
-        watchdog_job.modify(next_run_time=datetime.now() + timedelta(minutes=minutes))
-
-    @scheduler.task('interval', id='network_watchdog', minutes=60, jitter=300)
-    def run_network_watchdog_task():
-        try:
-            network_state_event = watchdog.ensure_network_connection()
-            if network_state_event == DiagEvent.NETWORK_DISCONNECTED:
-                # accelerate the check for network connectivity
-                modify_network_watchdog_next_run(minutes=15)
-        except Exception as e:
-            logging.warning(f'Unknown error while checking the network connectivity : {e}')
-
     @scheduler.task('interval', id='quectel_repeating', hours=1)
     def run_quectel_health_task():
         try:
@@ -81,6 +65,30 @@ def init_scheduled_tasks(app) -> None:
     # bring first run time to run 2 minutes from now as well
     quectel_job = scheduler.get_job('quectel_repeating')
     quectel_job.modify(next_run_time=datetime.now() + timedelta(minutes=2))
+
+    init_watchdog_tasks(scheduler)
+
+
+def init_watchdog_tasks(scheduler) -> None:
+    watchdog = NetworkWatchdog()
+
+    @scheduler.task('interval', id='network_watchdog', minutes=60, jitter=300)
+    def run_network_watchdog_task():
+        try:
+            network_state_event = watchdog.ensure_network_connection()
+            if network_state_event == DiagEvent.NETWORK_DISCONNECTED:
+                # accelerate the check for network connectivity
+                watchdog_job = scheduler.get_job('network_watchdog')
+                watchdog_job.modify(next_run_time=datetime.now() + timedelta(minutes=15))
+        except Exception as e:
+            logging.warning(f'Unknown error while checking the network connectivity : {e}')
+
+    @scheduler.task('interval', id='emit_heartbeat', minutes=60, jitter=300)
+    def run_heartbeat_task():
+        try:
+            watchdog.emit_heartbeat()
+        except Exception as e:
+            logging.warning(f'Unknown error while emitting heartbeat : {e}')
 
 
 def get_app(name):
