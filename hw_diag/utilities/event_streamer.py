@@ -144,12 +144,14 @@ class EventStreamer(object):
         # even though event queue is thread safe
         # we are doing multiple operations potentially from different threads
         with self.processing_lock:
+            logging.debug(f"total {self._event_queue.qsize()} events in queue")
             while not self._event_queue.empty():
                 # we don't need to worry about get blocking as we are not working with
                 # threads here.
                 event = self._event_queue.peek()
                 if not _upload_event(event):
                     return
+                logging.debug("removing sent event from queue")
                 # remove the event from the queue
                 self._event_queue.get()
                 self._event_queue.task_done()

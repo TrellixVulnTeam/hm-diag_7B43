@@ -62,7 +62,7 @@ def run_network_watchdog_task(watchdog, scheduler):
         if network_state_event == DiagEvent.NETWORK_DISCONNECTED:
             # accelerate the check for network connectivity
             watchdog_job = scheduler.get_job('network_watchdog')
-            watchdog_job.modify(next_run_time=datetime.now() + timedelta(minutes=15))
+            watchdog_job.modify(next_run_time=datetime.now() + timedelta(minutes=5))
     except Exception as e:
         logging.warning(f'Unknown error while checking the network connectivity : {e}')
 
@@ -88,7 +88,7 @@ def init_scheduled_tasks(app) -> None:
                       trigger='interval', hours=1)
     scheduler.add_job(id='network_watchdog',
                       func=partial(run_network_watchdog_task, watchdog, scheduler),
-                      trigger='interval', minutes=60, jitter=300)
+                      trigger='interval', minutes=5, jitter=300)
     scheduler.add_job(id='emit_heartbeat', func=partial(run_heartbeat_task, watchdog),
                       trigger='interval', minutes=60, jitter=300)
 
